@@ -1,0 +1,13 @@
+The goal is to implement a browser-resident image upscaling pipeline that converts an ESRGAN-based PyTorch model into a browser-executable ONNX graph, optimizes it via INT8 quantization, and integrates it into a Manifest V3 browser extension capable of detecting, extracting, and upscaling webpage images (manga panels) using a tiled inference strategy.
+
+The system must:
+
+Execute model inference inside a Web Worker
+
+Use ONNX Runtime Web (WASM/WebGPU) for execution
+
+Avoid blocking the main browser thread
+
+Support dynamic image dimensions via tiling
+
+Maintain sub-500ms latency per 512×512 tile on CPU/WASM baseline

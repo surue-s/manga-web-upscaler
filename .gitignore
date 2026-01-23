@@ -1,0 +1,43 @@
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution
+dist/
+build/
+*.egg-info/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ONNX Runtime artifacts
+*.onnx
+*.onnx.bin
+
+# Large model files (keep tracked but mark in notes)
+*.pth
+
+# Environment variables
+.env
+.env.local
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
