@@ -8,7 +8,7 @@ sys.path.insert(0, str(root))
 
 # RealESRGAN architecture for 4x upscaling
 class RealESRGAN(torch.nn.Module):
-    def __init__(self, num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4):
+    def __init__(self, num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23):
         super(RealESRGAN, self).__init__()
         self.num_feat = num_feat
         
@@ -17,7 +17,7 @@ class RealESRGAN(torch.nn.Module):
         
         # RRDB blocks
         self.RRDB_trunk = torch.nn.Sequential(
-            *[self._make_rrdb_block(num_feat, num_grow_ch) for _ in range(num_block)]
+            *[self._make_rrdb_block(num_feat) for _ in range(num_block)]
         )
         
         # Second convolution
@@ -35,7 +35,7 @@ class RealESRGAN(torch.nn.Module):
         # Activation
         self.lrelu = torch.nn.LeakyReLU(negative_slope=0.2)
 
-    def _make_rrdb_block(self, num_feat, num_grow_ch):
+    def _make_rrdb_block(self, num_feat):
         """Simplified RRDB block"""
         return torch.nn.Sequential(
             torch.nn.Conv2d(num_feat, num_feat, 3, 1, 1),
@@ -85,7 +85,7 @@ except Exception as e:
 model.eval()  # Set the model to inference mode
 
 # Dummy input for the model (height and width can be dynamic)
-dummy_input = torch.randn(1, 3, 256, 256).astype(torch.float32)  # 256x256 test input
+dummy_input = torch.randn(1, 3, 256, 256).to(torch.float32)  # 256x256 test input
 
 # Create output directory if it doesn't exist
 output_dir = root / "onnx"
