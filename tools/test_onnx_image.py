@@ -6,7 +6,7 @@ from pathlib import Path
 
 #loading model 
 root = Path(__file__).resolve().parent.parent
-model_path = root / "onnx" / "esrgan_model.onnx"
+model_path = root / "onnx" / "esrgan_anime_model.onnx"
 if not model_path.exists():
     raise FileNotFoundError(f"Model not found at: {model_path}")
 
