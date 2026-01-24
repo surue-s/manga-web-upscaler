@@ -20,7 +20,7 @@ model.eval()  # Set the model to inference mode
 dummy_input = torch.randn(1, 3, 512, 512)  # Batch size of 1, 3 channels, 512x512 image
 
 # Export the model to ONNX format
-onnx_file_path = "esrgan_model.onnx"
+onnx_file_path = "onnx\esrgan_model.onnx"
 torch.onnx.export(model, 
                   dummy_input, 
                   onnx_file_path, 
