@@ -18,7 +18,7 @@ sess = ort.InferenceSession(
 input_name = sess.get_inputs()[0].name
 
 #load image
-img_path = root / "test_images" / "0014.jpg"
+img_path = root / "test_images" / "test.jpg"
 img = Image.open(img_path).convert('RGB')
 img = img.resize((256, 256))
 
