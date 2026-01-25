@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Manga Upscaler</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎨 Manga Upscaler</h1>
+      <p class="subtitle">AI-powered image enhancement</p>
+    </header>
+    
+    <main>
+      <div class="status-section">
+        <div class="status-item">
+          <span class="label">Status:</span>
+          <span id="status" class="value">Initializing...</span>
+        </div>
+        <div class="status-item">
+          <span class="label">Images detected:</span>
+          <span id="image-count" class="value">-</span>
+        </div>
+        <div class="status-item">
+          <span class="label">Model:</span>
+          <span id="model-status" class="value">Not loaded</span>
+        </div>
+      </div>
+      
+      <div class="actions">
+        <button id="detect-btn" class="btn btn-secondary">
+          🔍 Detect Images
+        </button>
+        
+        <button id="upscale-btn" class="btn btn-primary" disabled>
+          ⬆️ Upscale Single Image
+        </button>
+        
+        <button id="upscale-all-btn" class="btn btn-secondary" disabled>
+          ⬆️ Upscale All Images
+        </button>
+      </div>
+      
+      <div id="progress-section" class="progress-section hidden">
+        <div class="progress-label">Processing...</div>
+        <div class="progress-bar">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div id="progress-text" class="progress-text">0%</div>
+      </div>
+      
+      <div id="result-section" class="result-section hidden">
+        <div class="result-icon">✅</div>
+        <div class="result-text" id="result-text"></div>
+      </div>
+      
+      <div id="error-section" class="error-section hidden">
+        <div class="error-icon">❌</div>
+        <div class="error-text" id="error-text"></div>
+      </div>
+    </main>
+    
+    <footer>
+      <div class="info">
+        <small>RealESRGAN Anime 4x • Client-side processing</small>
+      </div>
+    </footer>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
