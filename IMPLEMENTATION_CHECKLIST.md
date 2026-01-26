@@ -3,16 +3,16 @@
 ## ✅ Completed Tasks
 
 ### Architecture Refactoring
+
 - [x] **Identified root cause:** Service worker using forbidden `new Worker()` API
 - [x] **Designed new architecture:** Move Web Worker to content script
 - [x] **Service worker refactoring:**
   - [x] Removed `new Worker()` constructor
   - [x] Removed `initializeWorker()` function
-  - [x] Removed `sendToWorker()` function  
+  - [x] Removed `sendToWorker()` function
   - [x] Added message routing to content script
   - [x] Added state management (modelLoaded, workerReady)
   - [x] Reduced from 204 to 101 lines
-  
 - [x] **Content script enhancement:**
   - [x] Added `initializeWorker()` for Web Worker creation
   - [x] Added `sendToWorker()` for promise-based worker communication
@@ -28,6 +28,7 @@
   - [x] Added +15 lines for better response format
 
 ### Code Quality
+
 - [x] All message handlers properly typed
 - [x] Error handling in all code paths
 - [x] Timeout protection (60 seconds per request)
@@ -36,6 +37,7 @@
 - [x] Promise-based async/await patterns
 
 ### Documentation
+
 - [x] Created `ARCHITECTURE_FIX.md` - detailed explanation of changes
 - [x] Created `TEST_GUIDE.md` - step-by-step testing instructions
 - [x] Created `FIX_SUMMARY.md` - concise problem/solution summary
@@ -69,6 +71,7 @@ Before you reload the extension, verify:
 ## 🧪 Testing Checklist
 
 ### Phase 1: Extension Loading
+
 - [ ] Go to `chrome://extensions`
 - [ ] Toggle Developer Mode (top right)
 - [ ] Load extension from folder: `extension/`
@@ -76,6 +79,7 @@ Before you reload the extension, verify:
 - [ ] Check: No loading errors in Extensions page
 
 ### Phase 2: Initialization Check
+
 - [ ] Open any website
 - [ ] Press F12 to open DevTools
 - [ ] Go to Console tab
@@ -84,6 +88,7 @@ Before you reload the extension, verify:
 - [ ] Check: No errors (red text) in console
 
 ### Phase 3: Image Detection
+
 - [ ] Click extension icon (toolbar)
 - [ ] Popup window opens
 - [ ] Click "Detect Images" button
@@ -92,6 +97,7 @@ Before you reload the extension, verify:
 - [ ] Expected: 1-10 images detected on most websites
 
 ### Phase 4: Worker Initialization
+
 - [ ] Still in "Detect Images" state
 - [ ] Check console for:
   - [ ] `[Content Script] Creating Web Worker for inference...`
@@ -100,6 +106,7 @@ Before you reload the extension, verify:
   - [ ] `[Inference Worker] Model pre-loaded successfully`
 
 ### Phase 5: Inference Execution
+
 - [ ] Click "Upscale Single Image" button
 - [ ] Watch console as process progresses:
   - [ ] `[Manga Upscaler] Starting upscale for image...`
@@ -111,12 +118,14 @@ Before you reload the extension, verify:
   - [ ] `[Manga Upscaler] Image replaced: WxH → (W*4)x(H*4)`
 
 ### Phase 6: Result Verification
+
 - [ ] Popup shows progress: "Complete!" or similar
 - [ ] Website shows: One image is noticeably larger (4x)
 - [ ] Console: No errors (only [Manga Upscaler] logs)
 - [ ] Performance: Responsive UI (no freezing)
 
 ### Phase 7: Stress Testing
+
 - [ ] Open second website with images
 - [ ] Try "Detect Images" again
 - [ ] Try "Upscale Single Image" again
@@ -124,6 +133,7 @@ Before you reload the extension, verify:
 - [ ] Expected: 5-15 seconds for cached inference
 
 ### Phase 8: Error Handling
+
 - [ ] Try upscaling on page with no images
 - [ ] Expected: Error message in popup
 - [ ] Try upscaling very large image (>2000px)
@@ -133,26 +143,26 @@ Before you reload the extension, verify:
 
 ## 🐛 Common Issues & Verification
 
-| Issue | Check | Fix |
-|-------|-------|-----|
-| Extension won't load | Icons exist at `icons/*.png` | Create placeholder PNGs |
-| "Worker is not defined" | Content script creates worker | Check content.js has initializeWorker() |
-| ONNX Runtime not loading | CDN accessible (need internet) | Fallback to bundled version |
-| Model won't load | File at `models/esrgan_*.onnx` exists | Verify file path and size |
-| Inference timeout | First run takes time | Increase timeout or wait longer |
-| Cross-origin error | Content script handles CORS | Check content script has DOM access |
-| No images detected | Website has images | Try different website |
+| Issue                    | Check                                 | Fix                                     |
+| ------------------------ | ------------------------------------- | --------------------------------------- |
+| Extension won't load     | Icons exist at `icons/*.png`          | Create placeholder PNGs                 |
+| "Worker is not defined"  | Content script creates worker         | Check content.js has initializeWorker() |
+| ONNX Runtime not loading | CDN accessible (need internet)        | Fallback to bundled version             |
+| Model won't load         | File at `models/esrgan_*.onnx` exists | Verify file path and size               |
+| Inference timeout        | First run takes time                  | Increase timeout or wait longer         |
+| Cross-origin error       | Content script handles CORS           | Check content script has DOM access     |
+| No images detected       | Website has images                    | Try different website                   |
 
 ## 📊 Performance Benchmarks
 
 After successful test, note these timings:
 
-- [ ] Extension load time: _____ seconds
-- [ ] Image detection time: _____ seconds
-- [ ] First inference (WASM init): _____ seconds (30-60 normal)
-- [ ] Second inference (cached): _____ seconds (5-15 normal)
-- [ ] Memory usage peak: _____ MB (500-700 normal)
-- [ ] Final image resolution: _____ × _____
+- [ ] Extension load time: **\_** seconds
+- [ ] Image detection time: **\_** seconds
+- [ ] First inference (WASM init): **\_** seconds (30-60 normal)
+- [ ] Second inference (cached): **\_** seconds (5-15 normal)
+- [ ] Memory usage peak: **\_** MB (500-700 normal)
+- [ ] Final image resolution: **\_** × **\_**
 
 ## ✨ Success Criteria
 
@@ -227,7 +237,7 @@ If you encounter issues:
 1. **Check console logs** - Console tab in DevTools shows detailed progress
 2. **Review TEST_GUIDE.md** - Most common issues documented there
 3. **Check file paths** - Verify all files exist in correct locations
-4. **Verify permissions** - Manifest includes necessary chrome.* permissions
+4. **Verify permissions** - Manifest includes necessary chrome.\* permissions
 5. **Check CSP headers** - 'wasm-unsafe-eval' is needed for ONNX WASM
 
 ## 🎯 Summary

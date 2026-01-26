@@ -25,7 +25,7 @@
                       chrome.runtime.sendMessage()
                                       │
                     ┌─────────────────┴─────────────────┐
-                    ↓                                   
+                    ↓
           ┌──────────────────────────┐
           │  SERVICE WORKER          │
           │ (service-worker.js)      │
