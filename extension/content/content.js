@@ -33,7 +33,8 @@ function initializeWorker() {
     const workerUrl = chrome.runtime.getURL('worker/inference-worker.js');
     console.log('[Content Script] Worker URL:', workerUrl);
     
-    inferenceWorker = new Worker(workerUrl, { type: 'module' });
+    // Use classic worker so importScripts works inside inference-worker.js
+    inferenceWorker = new Worker(workerUrl, { type: 'classic' });
     
     inferenceWorker.onmessage = (event) => {
       const { type, payload } = event.data;
@@ -162,37 +163,137 @@ function detectImages() {
  * Handles cross-origin restrictions
  */
 async function extractImageData(imgElement) {
-  return new Promise((resolve, reject) => {
+  const srcUrl = imgElement.currentSrc || imgElement.src;
+
+  const isDataUrl = srcUrl.startsWith('data:');
+  const isBlobUrl = srcUrl.startsWith('blob:');
+  const isSameOrigin = (() => {
+    try {
+      const u = new URL(srcUrl, location.href);
+      return u.origin === location.origin;
+    } catch {
+      return false;
+    }
+  })();
+
+  const drawAndExtract = (image) => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    
-    // Set canvas size to image natural size
-    canvas.width = imgElement.naturalWidth;
-    canvas.height = imgElement.naturalHeight;
-    
-    // Create a new image to handle cross-origin
+    const w = image.naturalWidth || image.width;
+    const h = image.naturalHeight || image.height;
+    canvas.width = w;
+    canvas.height = h;
+    ctx.drawImage(image, 0, 0, w, h);
+    const imageData = ctx.getImageData(0, 0, w, h);
+    return { data: imageData.data, width: w, height: h };
+  };
+
+  // Helper: ask service worker to fetch image bytes (bypasses page CORS)
+  const fetchViaExtension = async () => {
+    const response = await chrome.runtime.sendMessage({
+      type: 'FETCH_IMAGE',
+      payload: { url: srcUrl }
+    });
+    if (!response || !response.success) {
+      throw new Error(response?.error || 'Service worker fetch failed');
+    }
+    const bytes = new Uint8Array(response.data);
+    const blob = new Blob([bytes], { type: response.contentType || 'image/jpeg' });
+    return blob;
+  };
+
+  // Helper: draw a blob to canvas
+  const drawBlob = async (blob) => {
+    return await new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(blob);
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const extracted = drawAndExtract(img);
+          URL.revokeObjectURL(objectUrl);
+          resolve(extracted);
+        } catch (error) {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error(`Failed to extract image data: ${error.message}`));
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Failed to load image blob (extension fetch)'));
+      };
+      img.src = objectUrl;
+    });
+  };
+
+  // Fast path for data/blob/same-origin: draw the existing element first
+  if (isDataUrl || isBlobUrl || isSameOrigin) {
+    try {
+      return drawAndExtract(imgElement);
+    } catch (error) {
+      console.warn('[Manga Upscaler] Direct draw failed, will try CORS-safe fetch:', error.message);
+    }
+  }
+
+  // Try extension fetch first (best chance to bypass hotlink protection)
+  try {
+    const blob = await fetchViaExtension();
+    return await drawBlob(blob);
+  } catch (swError) {
+    console.warn('[Manga Upscaler] Extension fetch failed, falling back to page fetch:', swError.message);
+  }
+
+  // Preferred CORS-safe path: fetch → blob → object URL → draw
+  try {
+    const response = await fetch(srcUrl, {
+      mode: 'cors',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer'
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    if (!blob || blob.size === 0) throw new Error('Empty image blob');
+
+    return await new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(blob);
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const extracted = drawAndExtract(img);
+          URL.revokeObjectURL(objectUrl);
+          resolve(extracted);
+        } catch (error) {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error(`Failed to extract image data: ${error.message}`));
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Failed to load image blob (possibly cross-origin)'));
+      };
+      img.src = objectUrl;
+    });
+  } catch (fetchError) {
+    console.warn('[Manga Upscaler] Fetch path failed, falling back to crossOrigin image load:', fetchError.message);
+  }
+
+  // Fallback: try new Image with crossOrigin flag (may still be blocked)
+  return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    
     img.onload = () => {
       try {
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        resolve({
-          data: imageData.data,
-          width: canvas.width,
-          height: canvas.height
-        });
+        const extracted = drawAndExtract(img);
+        resolve(extracted);
       } catch (error) {
         reject(new Error(`Failed to extract image data: ${error.message}`));
       }
     };
-    
     img.onerror = () => {
-      reject(new Error('Failed to load image (possibly cross-origin)'));
+      reject(new Error('Failed to load image (blocked by CORS / no-cors)'));
     };
-    
-    img.src = imgElement.src;
+    img.src = srcUrl;
   });
 }
 

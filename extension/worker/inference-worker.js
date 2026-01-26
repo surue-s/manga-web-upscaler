@@ -63,15 +63,13 @@ async function loadModel() {
       await loadONNXRuntime();
     }
     
-    // Get model URL from extension
-    // Note: In a real extension, use chrome.runtime.getURL() via message passing
-    // For now, we'll need to receive the model data directly
-    const modelUrl = '../models/esrgan_anime_model.onnx';
+    // Get model URL from extension using the worker's own URL as base
+    const modelUrl = new URL('../models/esrgan_anime_model.onnx', self.location.href).toString();
     
     console.log('[Inference Worker] Fetching model from:', modelUrl);
     
     // Fetch model file
-    const response = await fetch(modelUrl);
+    const response = await fetch(modelUrl, { mode: 'same-origin', credentials: 'omit' });
     if (!response.ok) {
       throw new Error(`Failed to fetch model: ${response.statusText}`);
     }

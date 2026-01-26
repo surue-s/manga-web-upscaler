@@ -46,6 +46,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('[Service Worker] Model status updated:', { modelLoaded, workerReady });
     return false;
   }
+
+  // Fetch image on behalf of content script to avoid CORS tainting
+  if (message.type === 'FETCH_IMAGE') {
+    const url = message.payload?.url;
+    if (!url) {
+      sendResponse({ success: false, error: 'No URL provided' });
+      return false;
+    }
+
+    (async () => {
+      try {
+        const response = await fetch(url, { credentials: 'omit', mode: 'cors' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const contentType = response.headers.get('content-type') || 'application/octet-stream';
+        const buffer = await response.arrayBuffer();
+        const data = Array.from(new Uint8Array(buffer));
+        sendResponse({ success: true, data, contentType });
+      } catch (error) {
+        console.error('[Service Worker] Image fetch failed:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+
+    return true; // Async response
+  }
   
   // Forward inference to content script (it has the worker)
   if (message.type === 'UPSCALE_IMAGE') {
