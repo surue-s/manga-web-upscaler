@@ -154,13 +154,24 @@ self.addEventListener('message', async (event) => {
         messageId
       });
       
-    } else if (type === 'RUN_INFERENCE') {
+    } else if (type === 'RUN_INFERENCE' || type === 'INFERENCE_REQUEST') {
+      // Support both message types for flexibility
       const { tensor, dims } = payload;
       const result = await runInference(tensor, dims);
       
+      // Calculate upscaled dimensions (4x scale)
+      const [batch, channels, height, width] = dims;
+      const upscaledHeight = height * 4;
+      const upscaledWidth = width * 4;
+      
       self.postMessage({
         type: 'INFERENCE_COMPLETE',
-        payload: result,
+        payload: {
+          tensor: result.tensor,
+          width: upscaledWidth,
+          height: upscaledHeight,
+          dims: [batch, channels, upscaledHeight, upscaledWidth]
+        },
         messageId
       });
       

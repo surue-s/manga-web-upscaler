@@ -2,15 +2,129 @@
  * CONTENT SCRIPT - Runs in the context of web pages
  * 
  * Responsibilities:
+ * - Create and manage Web Worker for inference
  * - Detect and analyze images on the page
  * - Extract image data for upscaling
  * - Replace original images with upscaled results
  * - Communicate with service worker via message passing
- * 
- * NEVER performs heavy computation - delegates to Web Worker via service worker
  */
 
 console.log('[Manga Upscaler] Content script loaded');
+
+// Web Worker instance (created once, reused for all inferences)
+let inferenceWorker = null;
+let modelLoaded = false;
+let workerReady = false;
+
+/**
+ * Initialize Web Worker for ONNX inference
+ * Only called once per page load
+ */
+function initializeWorker() {
+  if (inferenceWorker) {
+    console.log('[Content Script] Worker already initialized');
+    return;
+  }
+  
+  console.log('[Content Script] Creating Web Worker for inference...');
+  
+  try {
+    // Create worker from extension URL
+    const workerUrl = chrome.runtime.getURL('worker/inference-worker.js');
+    console.log('[Content Script] Worker URL:', workerUrl);
+    
+    inferenceWorker = new Worker(workerUrl, { type: 'module' });
+    
+    inferenceWorker.onmessage = (event) => {
+      const { type, payload } = event.data;
+      console.log(`[Content Script] Message from worker: ${type}`);
+      
+      if (type === 'WORKER_READY') {
+        workerReady = true;
+        console.log('[Content Script] Worker is ready');
+        notifyServiceWorkerStatus();
+        
+      } else if (type === 'MODEL_LOADED') {
+        modelLoaded = true;
+        console.log('[Content Script] Model loaded successfully');
+        notifyServiceWorkerStatus();
+        
+      } else if (type === 'MODEL_LOAD_ERROR') {
+        console.error('[Content Script] Model load error:', payload.error);
+        modelLoaded = false;
+        notifyServiceWorkerStatus();
+      }
+    };
+    
+    inferenceWorker.onerror = (error) => {
+      console.error('[Content Script] Worker error:', error);
+      workerReady = false;
+      modelLoaded = false;
+    };
+    
+  } catch (error) {
+    console.error('[Content Script] Failed to create worker:', error);
+  }
+}
+
+/**
+ * Send message to worker and wait for response
+ */
+function sendToWorker(message) {
+  return new Promise((resolve, reject) => {
+    if (!inferenceWorker) {
+      initializeWorker();
+    }
+    
+    if (!inferenceWorker) {
+      reject(new Error('Failed to initialize worker'));
+      return;
+    }
+    
+    const messageId = Date.now() + Math.random();
+    const messageWithId = { ...message, messageId };
+    
+    const handler = (event) => {
+      const { type, payload, messageId: responseId } = event.data;
+      
+      if (responseId !== messageId) return;
+      
+      inferenceWorker.removeEventListener('message', handler);
+      
+      if (type === 'INFERENCE_COMPLETE') {
+        resolve(payload);
+      } else if (type === 'INFERENCE_ERROR') {
+        reject(new Error(payload.error));
+      } else if (type === 'MODEL_LOADED') {
+        modelLoaded = true;
+        notifyServiceWorkerStatus();
+        resolve({ loaded: true });
+      } else if (type === 'MODEL_LOAD_ERROR') {
+        reject(new Error(payload.error));
+      }
+    };
+    
+    inferenceWorker.addEventListener('message', handler);
+    inferenceWorker.postMessage(messageWithId);
+    
+    setTimeout(() => {
+      inferenceWorker.removeEventListener('message', handler);
+      reject(new Error('Worker timeout'));
+    }, 60000);
+  });
+}
+
+/**
+ * Notify service worker about model status
+ */
+function notifyServiceWorkerStatus() {
+  chrome.runtime.sendMessage({
+    type: 'UPDATE_MODEL_STATUS',
+    payload: { loaded: modelLoaded, ready: workerReady }
+  }).catch(error => {
+    console.log('[Content Script] Could not notify service worker:', error);
+  });
+}
 
 // Track which images have been upscaled to avoid duplicates
 const upscaledImages = new WeakSet();
@@ -160,11 +274,16 @@ function replaceImage(imgElement, upscaledImageData) {
 }
 
 /**
- * Upscale a single image
+ * Upscale a single image using local Web Worker
  */
 async function upscaleImage(imgElement) {
   try {
     console.log(`[Manga Upscaler] Starting upscale for image: ${imgElement.src.substring(0, 50)}...`);
+    
+    // Initialize worker if needed
+    if (!inferenceWorker) {
+      initializeWorker();
+    }
     
     // Extract image data
     const imageData = await extractImageData(imgElement);
@@ -174,9 +293,9 @@ async function upscaleImage(imgElement) {
     const { tensor, dims } = imageDataToTensor(imageData);
     console.log(`[Manga Upscaler] Converted to tensor: ${dims}`);
     
-    // Send to service worker for inference
-    const response = await chrome.runtime.sendMessage({
-      type: 'UPSCALE_IMAGE',
+    // Send directly to worker for inference
+    const response = await sendToWorker({
+      type: 'INFERENCE_REQUEST',
       payload: {
         tensor: Array.from(tensor), // Convert to regular array for message passing
         dims: dims,
@@ -185,7 +304,7 @@ async function upscaleImage(imgElement) {
       }
     });
     
-    if (response.success) {
+    if (response) {
       console.log(`[Manga Upscaler] Received upscaled result: ${response.width}x${response.height}`);
       
       // Convert result back to ImageData
@@ -200,7 +319,7 @@ async function upscaleImage(imgElement) {
       
       return { success: true };
     } else {
-      throw new Error(response.error || 'Unknown error');
+      throw new Error('No response from worker');
     }
     
   } catch (error) {
