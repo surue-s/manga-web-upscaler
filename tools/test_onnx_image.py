@@ -18,14 +18,13 @@ sess = ort.InferenceSession(
 input_name = sess.get_inputs()[0].name
 
 #load image
-img_path = root / "test_images" / "test.jpg"
+img_path = root / "test_images" / "Screenshot_1.png"
 img = Image.open(img_path).convert('RGB')
 img = img.resize((256, 256))
 
 #preprocessing image 
 # Try keeping as RGB without BGR conversion
 img_np = np.array(img).astype(np.float32) / 255.0  # Normalize to [0, 1]
-# Keep RGB order (don't convert to BGR)
 # Transpose to CHW format and add batch dimension
 img_np = np.transpose(img_np, (2, 0, 1))[None, :, :, :]  # (1, 3, H, W)
 
