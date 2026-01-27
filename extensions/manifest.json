@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Manga Web Upscaler",
+  "version": "1.0.0",
+  "description": "Upscale manga images using AI (RealESRGAN) in the browser.",
+
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Manga Web Upscaler"
+  },
+
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "worker/inference-worker.js",
+        "models/esrgan_anime_model.onnx"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+
+  "permissions": ["scripting"]
+}
