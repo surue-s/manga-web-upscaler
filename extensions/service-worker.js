@@ -53,3 +53,38 @@ function handleCheckModelStatus(request, sender, sendResponse) {
   console.log('checking model status', modelReady);
   sendResponse({ modelReady: modelReady });
 }
+
+//handler model loaded message
+function handleCheckModelLoaded(request, sender, sendResponse) {
+  console.log('model loaded yeyay');
+  modelReady = true;
+}
+
+//handler to detect images on the page. 
+function handleDetectImages(request, sender, sendResponse){
+  console.log('forward detect_images to the content script');
+ 
+
+  //get active tab
+  chrome.tab.query ({active: true, currentWindow: true}, (tabs) => {
+    if(tabs.length === 0){
+      sendResponse({ error: 'no active tab'});
+      return;
+  
+    }
+
+    //forward essage to content script
+    chrome.tabs.sendMessage
+    tabs[0].id,
+    {action: "DETECT_IMAGES"},
+    (response) => {
+      if(chrome.runtime.lastError){
+        console.error('[Service Worker] Error forwarding to content script:', chrome.runtime.lastError);
+        sendResponse({ error: chrome.runtime.lastError.message });
+      } else {
+        console.log('[Service Worker] Received response from content script:', response);
+        sendResponse(response);
+      }
+    }
+})
+}
