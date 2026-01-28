@@ -1,4 +1,3 @@
-// Minimal inference worker
 self.addEventListener('message', (event) => {
     self.postMessage({ ok: true, echo: event.data });
 });
