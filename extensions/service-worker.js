@@ -23,7 +23,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   //handle different types of messages
 
-  switch (request.action0){
+  switch (request.action){
     case "CHECK_MODEL_STATUS":
       handleCheckModelStatus(request, sender, sendResponse);
       return true; //keep channel open for async responses
@@ -66,7 +66,7 @@ function handleDetectImages(request, sender, sendResponse){
  
 
   //get active tab
-  chrome.tab.query ({active: true, currentWindow: true}, (tabs) => {
+  chrome.tabs.query ({active: true, currentWindow: true}, (tabs) => {
     if(tabs.length === 0){
       sendResponse({ error: 'no active tab'});
       return;
