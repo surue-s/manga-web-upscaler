@@ -74,7 +74,7 @@ function handleDetectImages(request, sender, sendResponse){
     }
 
     //forward essage to content script
-    chrome.tabs.sendMessage
+    chrome.tabs.sendMessage(
     tabs[0].id,
     {action: "DETECT_IMAGES"},
     (response) => {
@@ -86,5 +86,40 @@ function handleDetectImages(request, sender, sendResponse){
         sendResponse(response);
       }
     }
-})
+  );
+});
 }
+
+
+//handler to upscale images
+function handleUpscaleImage(request, sender, sendResponse){
+  console.log("forwwardin UPSCALE_SINGLE_IMAGE to the content script");
+
+  //get the active tab
+
+  chrome.tabs.query ({active: true, currentWindow: true}, (tabs) => { 
+    if(tabs.length === 0){
+      sendResponse({ error: 'no active tab'});
+      return;
+    }
+
+    //forward message to content script
+    chrome.tabs.sendMessage(
+      tabs[0].id,
+      {action: "UPSCALE_SINGLE_IMAGE"},
+      (response)=> {
+        if (chrome.runtime.lastError){
+          console.error("error in forwarding to content script", chrome.runtime.lastError);
+          sendResponse({ error: chrome.runtime.lastError.message});
+        }
+         else {
+          console.log("[Service Worker] Received response from content script:", response);
+          sendResponse(response);
+
+         }
+      }
+    )
+});
+}
+
+console.log("service worker setup complete");
