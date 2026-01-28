@@ -38,9 +38,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
           case "UPSCALE_SINGLE_IMAGE":
             handleUpscaleImage(request, sender, sendResponse);
-            return false; //same
-
-            default:
+        return true; //same
               console.log('unknown message', request.action);
               sendResponse({ error: 'unknown message'});
               return false;
