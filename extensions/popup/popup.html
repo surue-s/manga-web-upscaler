@@ -1,13 +1,37 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <title>Manga Web Upscaler</title>
-    <style>body{font-family:system-ui, Arial; width:300px; padding:10px;}</style>
-  </head>
-  <body>
-    <h3>Manga Web Upscaler</h3>
-    <p>Popup loaded.</p>
-    <script src="popup.js"></script>
-  </body>
-  </html>
+<head>
+  <meta charset="UTF-8">
+  <title>Manga Web Upscaler</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>🖼️ Manga Upscaler</h1>
+  
+  <div class="status-box">
+    <div class="status-label">Model Status</div>
+    <div class="status-text" id="modelStatus">Loading...</div>
+  </div>
+  
+  <div class="status-box">
+    <div class="status-label">Detected Images</div>
+    <div class="status-text" id="imageCount">0</div>
+  </div>
+  
+  <div class="button-group">
+    <button class="btn-primary" id="detectBtn">🔍 Detect Images</button>
+    <button class="btn-primary" id="upscaleBtn" disabled>⚡ Upscale Single Image</button>
+  </div>
+  
+  <div class="progress-container" id="progressContainer">
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-text" id="progressText">0%</div>
+  </div>
+  
+  <div id="messageBox"></div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
