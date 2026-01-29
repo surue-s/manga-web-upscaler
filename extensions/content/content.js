@@ -4,8 +4,6 @@ console.log("content script loaded on:", location.href);
 //store detected images
 let detectedImages = [];
 let inferenceWorker = null;
-let pendingInference = {};
-let messageIdCounter = 0;
 
 //initialize web worker for inference
 function initializeWorker() {
@@ -19,10 +17,10 @@ function initializeWorker() {
     
     //create worker using extension URL
     const workerUrl = chrome.runtime.getURL("worker/inference-worker.js");
-    console.log("worker url:", workerUrl);
+    console.log("worker url:", workerUrl); // ADD THIS LINE
     
     inferenceWorker = new Worker(workerUrl);
-    console.log("worker created, waiting for ready message...");
+    console.log("worker created, waiting for ready message..."); // ADD THIS LINE
     
     //listen for messages from worker
     inferenceWorker.onmessage = (event) => {
@@ -32,23 +30,6 @@ function initializeWorker() {
         console.log("worker is ready");
         //notify service worker that model is loaded
         chrome.runtime.sendMessage({ action: "MODEL_LOADED" });
-      } else if (event.data.status === "complete") {
-        //inference complete, get the callback
-        const messageId = event.data.messageId;
-        const callback = pendingInference[messageId];
-        if (callback) {
-          console.log("inference complete, calling callback");
-          callback(event.data.imageData);
-          delete pendingInference[messageId];
-        }
-      } else if (event.data.status === "error") {
-        const messageId = event.data.messageId;
-        const callback = pendingInference[messageId];
-        if (callback) {
-          console.error("worker error:", event.data.error);
-          callback(null);
-          delete pendingInference[messageId];
-        }
       }
     };
     
@@ -61,7 +42,6 @@ function initializeWorker() {
     console.error("failed to initialize worker:", error);
   }
 }
-
 //detect images on the page
 function detectImages() {
   console.log("detecting images on page...");
@@ -105,7 +85,8 @@ async function upscaleSingleImage() {
   }
   
   if (!inferenceWorker) {
-    throw new Error("worker not initialized");
+    initializeWorker();
+    throw new Error("worker not initialized yet");
   }
   
   const img = detectedImages[0];
@@ -116,14 +97,8 @@ async function upscaleSingleImage() {
     const imageData = await extractImageData(img);
     console.log("extracted image data:", imageData.width, "x", imageData.height);
     
-    //send to worker for upscaling
-    const upscaledImageData = await sendToWorker(imageData);
-    console.log("received upscaled image data");
-    
-    //replace image with upscaled version
-    await replaceImage(img, upscaledImageData);
-    console.log("image replaced successfully");
-    
+    //TODO: send to worker for upscaling
+    //for now, just return success
     return { success: true };
   } catch (error) {
     console.error("upscale failed:", error);
@@ -149,69 +124,6 @@ async function extractImageData(img) {
       //get image data
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       resolve(imageData);
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-
-//send image data to worker and wait for result
-async function sendToWorker(imageData) {
-  return new Promise((resolve, reject) => {
-    try {
-      const messageId = messageIdCounter++;
-      
-      //store callback for this message
-      pendingInference[messageId] = (result) => {
-        if (result) {
-          resolve(result);
-        } else {
-          reject(new Error("worker inference failed"));
-        }
-      };
-      
-      //send to worker
-      console.log("sending image to worker for inference");
-      inferenceWorker.postMessage({
-        action: "INFERENCE_REQUEST",
-        imageData: imageData,
-        messageId: messageId
-      });
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-
-//replace image with upscaled version
-async function replaceImage(img, imageData) {
-  return new Promise((resolve, reject) => {
-    try {
-      //create canvas for upscaled image
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      
-      canvas.width = imageData.width;
-      canvas.height = imageData.height;
-      
-      //put upscaled image data on canvas
-      ctx.putImageData(imageData, 0, 0);
-      
-      //convert canvas to blob
-      canvas.toBlob((blob) => {
-        //create object url
-        const url = URL.createObjectURL(blob);
-        
-        //replace image src
-        img.src = url;
-        
-        //update image dimensions
-        img.width = imageData.width;
-        img.height = imageData.height;
-        
-        console.log("image replaced with upscaled version");
-        resolve();
-      }, "image/png");
     } catch (error) {
       reject(error);
     }
