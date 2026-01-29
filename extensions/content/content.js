@@ -13,9 +13,14 @@ function initializeWorker() {
   }
   
   try {
+    console.log("attempting to create worker...");
+    
     //create worker using extension URL
     const workerUrl = chrome.runtime.getURL("worker/inference-worker.js");
+    console.log("worker url:", workerUrl); // ADD THIS LINE
+    
     inferenceWorker = new Worker(workerUrl);
+    console.log("worker created, waiting for ready message..."); // ADD THIS LINE
     
     //listen for messages from worker
     inferenceWorker.onmessage = (event) => {
@@ -37,7 +42,6 @@ function initializeWorker() {
     console.error("failed to initialize worker:", error);
   }
 }
-
 //detect images on the page
 function detectImages() {
   console.log("detecting images on page...");
