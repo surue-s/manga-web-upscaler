@@ -15,9 +15,9 @@ async function initializeModel() {
     console.log("loading onnx model...");
     
     //get model url from extension
-    const modelUrl = self.location.origin + "/models/esrgan_anime_model.onnx";
+    const modelUrl = new URL("/models/esrgan_anime_model.onnx", self.location.origin).href;
     console.log("model url:", modelUrl);
-    
+
     //create inference session
     session = await ort.InferenceSession.create(modelUrl, {
       executionProviders: ["wasm"],
