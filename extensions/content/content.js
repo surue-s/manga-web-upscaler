@@ -110,10 +110,14 @@ async function upscaleSingleImage() {
 async function extractImageData(img) {
   return new Promise((resolve, reject) => {
     try {
-      //create canvas
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      
+//create canvas
+const canvas = document.createElement("canvas");
+const ctx = canvas.getContext("2d");
+
+if (!ctx) {
+  reject(new Error("failed to get 2d context"));
+  return;
+}
       //set canvas size to image size
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
