@@ -50,8 +50,12 @@ async function runInference(imageData) {
     console.log("input shape:", imageData.width, "x", imageData.height);
     
     //convert imagedata to tensor
-    const inputTensor = imageDataToTensor(imageData);
-    console.log("input tensor shape:", inputTensor.dims);
+const inputTensor = imageDataToTensor(imageData);
+console.log("input tensor shape:", inputTensor.dims);
+
+if (inputTensor.dims[2] === 0 || inputTensor.dims[3] === 0) {
+  throw new Error("invalid tensor dimensions");
+}
     
     //run inference
     const feeds = {};
