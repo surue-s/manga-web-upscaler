@@ -108,6 +108,9 @@ async function upscaleSingleImage() {
 
 //extract image data from img element
 async function extractImageData(img) {
+    if (!img.complete || img.naturalWidth === 0) {
+    throw new Error("image not loaded or invalid");
+  }
   return new Promise((resolve, reject) => {
     try {
 //create canvas
