@@ -33,9 +33,9 @@ function initializeWorker() {
       }
     };
     
-    inferenceWorker.onerror = (error) => {
-      console.error("worker error:", error);
-    };
+  inferenceWorker.onerror = (error) => {
+  console.error("❌ worker error:", error.message, error.filename, error.lineno);
+};
     
     console.log("worker initialized successfully");
   } catch (error) {
