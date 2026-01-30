@@ -165,3 +165,4 @@ self.onmessage = async (event) => {
 //start loading model
 console.log("starting model initialization...");
 initializeModel();
+

@@ -4,6 +4,8 @@ console.log("content script loaded on:", location.href);
 //store detected images
 let detectedImages = [];
 let inferenceWorker = null;
+let workerReady = false;
+let messageQueue = [];
 
 //initialize web worker for inference
 function initializeWorker() {
@@ -17,29 +19,38 @@ function initializeWorker() {
     
     //create worker using extension URL
     const workerUrl = chrome.runtime.getURL("worker/inference-worker.js");
-    console.log("worker url:", workerUrl); // ADD THIS LINE
+    console.log("worker url:", workerUrl);
     
     inferenceWorker = new Worker(workerUrl);
-    console.log("worker created, waiting for ready message..."); // ADD THIS LINE
+    console.log("worker created, waiting for ready message...");
     
     //listen for messages from worker
     inferenceWorker.onmessage = (event) => {
       console.log("worker message:", event.data);
       
+      // 👇 ADD THIS BLOCK HERE
       if (event.data.status === "ready") {
         console.log("worker is ready");
-        //notify service worker that model is loaded
+        workerReady = true;
+        
+        //process queued messages
+        if (messageQueue.length > 0) {
+          console.log(`processing ${messageQueue.length} queued messages`);
+          messageQueue.forEach(msg => inferenceWorker.postMessage(msg));
+          messageQueue = [];
+        }
+        
         chrome.runtime.sendMessage({ action: "MODEL_LOADED" });
       }
     };
     
-  inferenceWorker.onerror = (error) => {
-  console.error("❌ worker error:", error.message, error.filename, error.lineno);
-};
+    inferenceWorker.onerror = (error) => {
+      console.error("worker error:", error.message, error.filename, error.lineno);
+    };
     
     console.log("worker initialized successfully");
   } catch (error) {
-    console.error("failed to initialize worker:", error);
+    console.error("failed to initialize worker:", error.message);
   }
 }
 //detect images on the page
