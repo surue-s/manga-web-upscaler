@@ -141,6 +141,8 @@ if (!ctx) {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log("content script received:", request);
   
+    try {
+
   switch (request.action) {
     case "DETECT_IMAGES":
       handleDetectImages(request, sender, sendResponse);
@@ -154,6 +156,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       console.warn("unknown action:", request.action);
       sendResponse({ error: "unknown action" });
       return false;
+    }
+  } catch (error) {
+    console.error("message handler error:", error);
+    sendResponse({ error: error.message });
+    return false;
   }
 });
 
