@@ -17,12 +17,13 @@ async function initializeModel() {
     //get model url from extension
     const modelUrl = new URL("/models/esrgan_anime_model.onnx", self.location.origin).href;
     console.log("model url:", modelUrl);
-
+    
     //create inference session
+    console.log("creating inference session with wasm provider...");
     session = await ort.InferenceSession.create(modelUrl, {
       executionProviders: ["wasm"],
       graphOptimizationLevel: "all"
-    });
+});
     
     console.log("model loaded successfully");
     console.log("input names:", session.inputNames);
