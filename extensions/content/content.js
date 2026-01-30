@@ -48,8 +48,8 @@ function detectImages() {
   detectedImages = [];
   
   //find all img elements
-  const allImages = document.querySelectorAll("img");
-  console.log(`found ${allImages.length} img elements`);
+const allImages = document.querySelectorAll("img");
+console.log(`found ${allImages.length} total img elements on page`);
   
   //filter images (must be visible and reasonable size)
   allImages.forEach((img) => {
