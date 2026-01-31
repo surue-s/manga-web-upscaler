@@ -9,12 +9,23 @@ const progressContainer = document.getElementById("progressContainer");
 const progressFill = document.getElementById("progressFill");
 const progressText = document.getElementById("progressText");
 const messageBox = document.getElementById("messageBox");
+const speedModeBtn = document.getElementById("speedModeBtn");
+const qualityModeBtn = document.getElementById("qualityModeBtn");
 
 let detectedImagesCount = 0;
+let currentMode = "speed"; // default mode
 
 //wait for dom to load
 document.addEventListener("DOMContentLoaded", () => {
   console.log("Popup initialized");
+  
+  //load saved mode preference
+  chrome.storage.local.get(["upscaleMode"], (result) => {
+    if (result.upscaleMode) {
+      currentMode = result.upscaleMode;
+      updateModeUI();
+    }
+  });
   
   //check model status
   checkModelStatus();
@@ -22,6 +33,8 @@ document.addEventListener("DOMContentLoaded", () => {
   //button click handlers
   detectBtn.addEventListener("click", detectImages);
   upscaleBtn.addEventListener("click", upscaleSingleImage);
+  speedModeBtn.addEventListener("click", () => setMode("speed"));
+  qualityModeBtn.addEventListener("click", () => setMode("quality"));
 });
 
 //check if model is loaded in the service worker
@@ -81,9 +94,9 @@ function upscaleSingleImage() {
   progressContainer.style.display = "block";
   updateProgress(0);
   
-  //send message to service worker
+  //send message to service worker with mode preference
   chrome.runtime.sendMessage(
-    { action: "UPSCALE_SINGLE_IMAGE" },
+    { action: "UPSCALE_SINGLE_IMAGE", mode: currentMode },
     (response) => {
       if (chrome.runtime.lastError) {
         showError("upscale failed: " + chrome.runtime.lastError.message);
@@ -94,10 +107,10 @@ function upscaleSingleImage() {
       }
       
       if (response && response.success) {
-        updateProgresImage upscaled successfully");
+        updateProgress(100);
+        showSuccess("Image upscaled successfully");
       } else {
-        showError(response?.error || "U
-        showError(response?.error || "upscaling failed");
+        showError(response?.error || "Upscaling failed");
       }
       
       setTimeout(() => {
@@ -107,6 +120,25 @@ function upscaleSingleImage() {
       }, 2000);
     }
   );
+}
+
+//set upscale mode
+function setMode(mode) {
+  currentMode = mode;
+  chrome.storage.local.set({ upscaleMode: mode });
+  updateModeUI();
+  showSuccess(`Mode: ${mode === "speed" ? "Speed" : "Quality"}`);
+}
+
+//update mode button UI
+function updateModeUI() {
+  if (currentMode === "speed") {
+    speedModeBtn.classList.add("active");
+    qualityModeBtn.classList.remove("active");
+  } else {
+    speedModeBtn.classList.remove("active");
+    qualityModeBtn.classList.add("active");
+  }
 }
 
 //helper: update progress bar

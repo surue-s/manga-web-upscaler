@@ -31,5 +31,5 @@
   }
 ],
 
-  "permissions": ["scripting"]
+  "permissions": ["scripting", "storage"]
 }

@@ -30,6 +30,17 @@
     <button class="btn-primary" id="detectBtn">Scan for Images</button>
     <button class="btn-primary" id="upscaleBtn" disabled>Upscale Image</button>
   </div>
+
+  <div class="settings-section">
+    <div class="settings-label">
+      Mode
+      <span class="help-icon" title="Speed: Faster processing. Quality: Better results.">?</span>
+    </div>
+    <div class="toggle-group">
+      <button class="toggle-btn active" id="speedModeBtn" data-mode="speed">Speed</button>
+      <button class="toggle-btn" id="qualityModeBtn" data-mode="quality">Quality</button>
+    </div>
+  </div>
   
   <div class="progress-container" id="progressContainer">
     <div class="progress-bar">
