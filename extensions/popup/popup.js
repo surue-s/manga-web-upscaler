@@ -14,7 +14,7 @@ let detectedImagesCount = 0;
 
 //wait for dom to load
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("READY RAWRR");
+  console.log("Popup initialized");
   
   //check model status
   checkModelStatus();
@@ -26,20 +26,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
 //check if model is loaded in the service worker
 function checkModelStatus() {
-  modelStatusEl.textContent = "checking...";
+  modelStatusEl.textContent = "Checking...";
   
   chrome.runtime.sendMessage(
     { action: "CHECK_MODEL_STATUS" },
     (response) => {
       if (chrome.runtime.lastError) {
-        modelStatusEl.textContent = "error";
+        modelStatusEl.textContent = "Error";
         return;
       }
       
       if (response && response.modelReady) {
-        modelStatusEl.textContent = "ready";
+        modelStatusEl.textContent = "Ready";
       } else {
-        modelStatusEl.textContent = "loading model...";
+        modelStatusEl.textContent = "Loading Model...";
       }
     }
   );
@@ -64,7 +64,8 @@ function detectImages() {
         detectedImagesCount = response.count;
         imageCountEl.textContent = detectedImagesCount;
         upscaleBtn.disabled = detectedImagesCount === 0;
-        showSuccess(`found ${detectedImagesCount} image(s)`);
+        const plural = detectedImagesCount === 1 ? "image" : "images";
+        showSuccess(`Found ${detectedImagesCount} ${plural}`);
       }
       
       detectBtn.disabled = false;
@@ -93,9 +94,9 @@ function upscaleSingleImage() {
       }
       
       if (response && response.success) {
-        updateProgress(100);
-        showSuccess("image upscaled successfully!");
+        updateProgresImage upscaled successfully");
       } else {
+        showError(response?.error || "U
         showError(response?.error || "upscaling failed");
       }
       
