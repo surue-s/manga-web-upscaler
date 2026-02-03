@@ -90,7 +90,7 @@ console.log(`found ${allImages.length} total img elements on page`);
 }
 
 //upscale a single image
-async function upscaleSingleImage() {
+async function upscaleSingleImage(mode = "speed") {
   if (detectedImages.length === 0) {
     throw new Error("no images detected");
   }
@@ -101,16 +101,42 @@ async function upscaleSingleImage() {
   }
   
   const img = detectedImages[0];
-  console.log("upscaling image:", img.src);
+  console.log("upscaling image:", img.src, "mode:", mode);
   
   try {
     //extract image data
     const imageData = await extractImageData(img);
     console.log("extracted image data:", imageData.width, "x", imageData.height);
     
-    //TODO: send to worker for upscaling
-    //for now, just return success
-    return { success: true };
+    //send to worker for upscaling with mode parameter
+    const messageId = Date.now();
+    
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error("worker timeout"));
+      }, 60000);
+      
+      const handler = (event) => {
+        if (event.data.messageId === messageId) {
+          clearTimeout(timeout);
+          inferenceWorker.removeEventListener("message", handler);
+          
+          if (event.data.status === "complete") {
+            resolve({ success: true, imageData: event.data.imageData });
+          } else {
+            reject(new Error(event.data.error || "inference failed"));
+          }
+        }
+      };
+      
+      inferenceWorker.addEventListener("message", handler);
+      inferenceWorker.postMessage({
+        action: "INFERENCE_REQUEST",
+        imageData: imageData,
+        messageId: messageId,
+        mode: mode
+      });
+    });
   } catch (error) {
     console.error("upscale failed:", error);
     throw error;
@@ -189,7 +215,8 @@ function handleDetectImages(request, sender, sendResponse) {
 //handler: upscale single image
 async function handleUpscaleSingleImage(request, sender, sendResponse) {
   try {
-    const result = await upscaleSingleImage();
+    const mode = request.mode || "speed";
+    const result = await upscaleSingleImage(mode);
     sendResponse(result);
   } catch (error) {
     console.error("upscale error:", error);

@@ -40,7 +40,7 @@ async function initializeModel() {
 }
 
 //run inference on image data
-async function runInference(imageData) {
+async function runInference(imageData, mode = "speed") {
   if (!modelReady) {
     throw new Error("model not ready");
   }
@@ -48,6 +48,7 @@ async function runInference(imageData) {
   try {
     console.log("running inference...");
     console.log("input shape:", imageData.width, "x", imageData.height);
+    console.log("mode:", mode);
     
     //convert imagedata to tensor
 const inputTensor = imageDataToTensor(imageData);
@@ -57,11 +58,23 @@ if (inputTensor.dims[2] === 0 || inputTensor.dims[3] === 0) {
   throw new Error("invalid tensor dimensions");
 }
     
+    //configure inference options based on mode
+    const runOptions = {};
+    if (mode === "speed") {
+      // Speed mode: prioritize faster execution
+      runOptions.logSeverityLevel = 3; // Less logging
+      runOptions.logVerbosityLevel = 0;
+    } else if (mode === "quality") {
+      // Quality mode: prioritize better results
+      runOptions.logSeverityLevel = 2; // More logging for debugging
+      runOptions.logVerbosityLevel = 1;
+    }
+    
     //run inference
     const feeds = {};
     feeds[session.inputNames[0]] = inputTensor;
     
-    const results = await session.run(feeds);
+    const results = await session.run(feeds, runOptions);
     const outputTensor = results[session.outputNames[0]];
     
     console.log("inference complete");
@@ -137,12 +150,12 @@ function tensorToImageData(tensor) {
 self.onmessage = async (event) => {
   console.log("worker received message:", event.data);
   
-  const { action, imageData, messageId } = event.data;
+  const { action, imageData, messageId, mode } = event.data;
   
   switch (action) {
     case "INFERENCE_REQUEST":
       try {
-        const result = await runInference(imageData);
+        const result = await runInference(imageData, mode || "speed");
         self.postMessage({
           status: "complete",
           messageId: messageId,

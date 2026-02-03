@@ -88,7 +88,7 @@ function handleDetectImages(request, sender, sendResponse){
 
 // Handler: Upscale single image
 function handleUpscaleImage(request, sender, sendResponse){
-  console.log('forward upscale_single_image to the content script');
+  console.log('forward upscale_single_image to the content script', 'mode:', request.mode);
 
   // Get active tab
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -98,10 +98,10 @@ function handleUpscaleImage(request, sender, sendResponse){
       return;
     }
 
-    // Forward message to content script
+    // Forward message to content script with mode parameter
     chrome.tabs.sendMessage(
       tabs[0].id,
-      { action: "UPSCALE_SINGLE_IMAGE" },
+      { action: "UPSCALE_SINGLE_IMAGE", mode: request.mode || "speed" },
       (response) => {
         if(chrome.runtime.lastError){
           console.error('[Service Worker] Error forwarding to content script:', chrome.runtime.lastError);

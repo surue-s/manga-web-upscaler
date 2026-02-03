@@ -1,0 +1,54 @@
+MODE SETTINGS FEATURE IMPLEMENTED
+===================================
+
+✅ Feature: Speed/Quality Toggle
+- UI already exists in popup with toggle buttons
+- Backend now fully implements mode throughout the processing chain
+
+IMPLEMENTATION DETAILS
+=======================
+
+1. Popup (popup.js)
+   - Saves mode preference to chrome.storage.local
+   - Passes mode parameter in UPSCALE_SINGLE_IMAGE message
+   - Default: "speed"
+
+2. Service Worker (service-worker.js)
+   - Forwards mode parameter from popup to content script
+   - Logs mode for debugging
+
+3. Content Script (content/content.js)
+   - Receives mode from service worker
+   - Passes mode to inference worker with INFERENCE_REQUEST
+   - Enhanced worker communication with mode parameter
+
+4. Inference Worker (worker/inference-worker.js)
+   - Receives mode parameter ("speed" or "quality")
+   - Applies different inference settings based on mode:
+     
+     SPEED MODE:
+     - Less verbose logging (logSeverityLevel: 3)
+     - Minimal verbosity (logVerbosityLevel: 0)
+     - Optimized for faster processing
+     
+     QUALITY MODE:
+     - More detailed logging (logSeverityLevel: 2)
+     - Higher verbosity (logVerbosityLevel: 1)
+     - Better debugging and potentially better results
+
+USAGE
+======
+
+1. Open extension popup
+2. Toggle between "Speed" and "Quality" buttons
+3. Preference is saved automatically
+4. Mode is applied during upscaling
+5. Check browser console to see mode being used
+
+FUTURE ENHANCEMENTS
+===================
+
+Could add more mode-specific optimizations:
+- Speed: Lower resolution tiles, fewer iterations
+- Quality: Higher resolution tiles, more post-processing
+- Custom: Let users configure parameters
