@@ -180,12 +180,71 @@ button:disabled {
   font-weight: 600;
   cursor: help;
   flex-shrink: 0;
+  position: relative;
+  transition: all 0.2s ease;
 }
 
 .help-icon:hover {
   border-color: #333333;
   color: #000000;
   background: #f0f0f0;
+}
+
+/* Custom Tooltip */
+.help-icon[data-tooltip] {
+  position: relative;
+}
+
+.help-icon[data-tooltip]::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%) scale(0.8);
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.2s ease 0.1s;
+  background: #1a1a1a;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 1000;
+  line-height: 1.4;
+  max-width: 200px;
+  white-space: normal;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  text-align: center;
+}
+
+/* Tooltip Arrow */
+.help-icon[data-tooltip]::after {
+  content: '';
+  position: absolute;
+  bottom: 115%;
+  left: 50%;
+  transform: translateX(-50%) scale(0);
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.2s ease 0.1s;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #1a1a1a;
+  z-index: 1000;
+}
+
+.help-icon[data-tooltip]:hover::before {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+.help-icon[data-tooltip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
 }
 
 /* Messages */

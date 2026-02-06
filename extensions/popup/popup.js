@@ -13,15 +13,25 @@ const speedModeBtn = document.getElementById("speedModeBtn");
 const qualityModeBtn = document.getElementById("qualityModeBtn");
 const statusMessage = document.getElementById("statusMessage");
 const statusText = document.getElementById("statusText");
-const statusMessage = document.getElementById("statusMessage");
-const statusText = document.getElementById("statusText");
 
 let detectedImagesCount = 0;
 let currentMode = "speed"; // default mode
 
+//add fallback title attribute for accessibility
+function setupTooltips() {
+  document.querySelectorAll('[data-tooltip]').forEach(el => {
+    if (!el.title) {
+      el.title = el.getAttribute('data-tooltip');
+    }
+  });
+}
+
 //wait for dom to load
 document.addEventListener("DOMContentLoaded", () => {
   console.log("Popup initialized");
+  
+  //setup tooltips for accessibility
+  setupTooltips();
   
   //load saved mode preference
   chrome.storage.local.get(["upscaleMode"], (result) => {
