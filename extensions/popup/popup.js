@@ -11,6 +11,10 @@ const progressText = document.getElementById("progressText");
 const messageBox = document.getElementById("messageBox");
 const speedModeBtn = document.getElementById("speedModeBtn");
 const qualityModeBtn = document.getElementById("qualityModeBtn");
+const statusMessage = document.getElementById("statusMessage");
+const statusText = document.getElementById("statusText");
+const statusMessage = document.getElementById("statusMessage");
+const statusText = document.getElementById("statusText");
 
 let detectedImagesCount = 0;
 let currentMode = "speed"; // default mode
@@ -62,6 +66,7 @@ function checkModelStatus() {
 function detectImages() {
   console.log("detect images clicked");
   detectBtn.disabled = true;
+  showStatus("Scanning page for images...");
   
   //send message to service worker
   chrome.runtime.sendMessage(
@@ -69,6 +74,7 @@ function detectImages() {
     (response) => {
       if (chrome.runtime.lastError) {
         showError("failed to detect images: " + chrome.runtime.lastError.message);
+        hideStatus();
         detectBtn.disabled = false;
         return;
       }
@@ -78,7 +84,8 @@ function detectImages() {
         imageCountEl.textContent = detectedImagesCount;
         upscaleBtn.disabled = detectedImagesCount === 0;
         const plural = detectedImagesCount === 1 ? "image" : "images";
-        showSuccess(`Found ${detectedImagesCount} ${plural}`);
+        hideStatus();
+        showSuccess(`✓ Found ${detectedImagesCount} ${plural}`);
       }
       
       detectBtn.disabled = false;
@@ -93,6 +100,7 @@ function upscaleSingleImage() {
   detectBtn.disabled = true;
   progressContainer.style.display = "block";
   updateProgress(0);
+  showStatus(`Upscaling image (${currentMode} mode)...`);
   
   //send message to service worker with mode preference
   chrome.runtime.sendMessage(
@@ -101,6 +109,7 @@ function upscaleSingleImage() {
       if (chrome.runtime.lastError) {
         showError("upscale failed: " + chrome.runtime.lastError.message);
         progressContainer.style.display = "none";
+        hideStatus();
         upscaleBtn.disabled = false;
         detectBtn.disabled = false;
         return;
@@ -108,8 +117,10 @@ function upscaleSingleImage() {
       
       if (response && response.success) {
         updateProgress(100);
-        showSuccess("Image upscaled successfully");
+        hideStatus();
+        showSuccess("✓ Image upscaled successfully (4x)");
       } else {
+        hideStatus();
         showError(response?.error || "Upscaling failed");
       }
       
@@ -161,4 +172,15 @@ function showSuccess(message) {
   setTimeout(() => {
     messageBox.innerHTML = "";
   }, 5000);
+}
+
+//helper: show live status with spinner
+function showStatus(message) {
+  statusText.textContent = message;
+  statusMessage.classList.add("active");
+}
+
+//helper: hide live status
+function hideStatus() {
+  statusMessage.classList.remove("active");
 }
