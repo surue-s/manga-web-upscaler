@@ -59,14 +59,19 @@ function checkModelStatus() {
     { action: "CHECK_MODEL_STATUS" },
     (response) => {
       if (chrome.runtime.lastError) {
-        modelStatusEl.textContent = "Error";
+        modelStatusEl.textContent = "Error - " + chrome.runtime.lastError.message;
+        console.error("Model status check error:", chrome.runtime.lastError);
         return;
       }
       
       if (response && response.modelReady) {
-        modelStatusEl.textContent = "Ready";
+        modelStatusEl.textContent = "Ready ✓";
+        modelStatusEl.style.color = "#4caf50";
       } else {
-        modelStatusEl.textContent = "Loading Model...";
+        modelStatusEl.textContent = "Loading... (60s first-time)";
+        modelStatusEl.style.color = "#ff9800";
+        // Recheck after 3 seconds
+        setTimeout(checkModelStatus, 3000);
       }
     }
   );

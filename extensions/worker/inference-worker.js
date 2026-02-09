@@ -5,9 +5,13 @@ let session = null;
 let modelReady = false;
 
 //load onnx runtime web from cdn
-importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js");
-
-console.log("onnx runtime loaded");
+try {
+  importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js");
+  console.log("onnx runtime loaded");
+} catch (error) {
+  console.error("failed to load onnx runtime:", error.message);
+  throw error;
+}
 
 //initialize: load the model
 async function initializeModel() {
@@ -15,8 +19,20 @@ async function initializeModel() {
     console.log("loading onnx model...");
     
     //get model url from extension
-    const modelUrl = new URL("/models/esrgan_anime_model.onnx", self.location.origin).href;
+    const modelUrl = chrome.runtime.getURL("models/esrgan_anime_model.onnx");
     console.log("model url:", modelUrl);
+    
+    // Test if model file is accessible
+    try {
+      const testResponse = await fetch(modelUrl);
+      if (!testResponse.ok) {
+        throw new Error(`Model fetch returned status ${testResponse.status}`);
+      }
+      console.log("model file is accessible");
+    } catch (fetchError) {
+      console.error("model file not accessible:", fetchError);
+      throw new Error(`Cannot access model file at ${modelUrl}: ${fetchError.message}`);
+    }
     
     //create inference session
     console.log("creating inference session with wasm provider...");

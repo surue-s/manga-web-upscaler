@@ -24,11 +24,10 @@ function initializeWorker() {
     inferenceWorker = new Worker(workerUrl);
     console.log("worker created, waiting for ready message...");
     
-    //listen for messages from worker
+      //listen for messages from worker
     inferenceWorker.onmessage = (event) => {
       console.log("worker message:", event.data);
       
-      // 👇 ADD THIS BLOCK HERE
       if (event.data.status === "ready") {
         console.log("worker is ready");
         workerReady = true;
@@ -40,12 +39,16 @@ function initializeWorker() {
           messageQueue = [];
         }
         
-        chrome.runtime.sendMessage({ action: "MODEL_LOADED" });
+        chrome.runtime.sendMessage({ action: "MODEL_LOADED" }).catch(err => {
+          console.log("no listener for MODEL_LOADED - extension may not be active");
+        });
       }
     };
     
     inferenceWorker.onerror = (error) => {
       console.error("worker error:", error.message, error.filename, error.lineno);
+      workerReady = false;
+      inferenceWorker = null;
     };
     
     console.log("worker initialized successfully");
@@ -97,7 +100,17 @@ async function upscaleSingleImage(mode = "speed") {
   
   if (!inferenceWorker) {
     initializeWorker();
-    throw new Error("worker not initialized yet");
+  }
+  
+  // Wait for worker to be ready with timeout
+  let waitCount = 0;
+  while (!workerReady && waitCount < 120) { // 120 * 500ms = 60 seconds
+    await new Promise(resolve => setTimeout(resolve, 500));
+    waitCount++;
+  }
+  
+  if (!workerReady) {
+    throw new Error("worker initialization timeout - model took too long to load");
   }
   
   const img = detectedImages[0];
