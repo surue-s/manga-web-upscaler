@@ -1,197 +1,90 @@
-//inference worker: loads and runs onnx model
-console.log("inference worker loaded");
+// inference-worker.js
+// Bare minimum: load local ONNX runtime, load model, run inference.
+// No chrome.* APIs — all URLs passed in via messages.
 
 let session = null;
-let modelReady = false;
 
-//load onnx runtime web from cdn
-try {
-  importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js");
-  console.log("onnx runtime loaded");
-} catch (error) {
-  console.error("failed to load onnx runtime:", error.message);
-  throw error;
-}
+// Load bundled ONNX Runtime (relative to this worker file)
+importScripts("../libs/ort.min.js");
+console.log("[worker] onnxruntime loaded");
 
-//initialize: load the model
-async function initializeModel() {
+// Tell ORT where to find wasm files (relative to worker)
+ort.env.wasm.wasmPaths = "../libs/";
+
+async function loadModel(modelUrl) {
+  console.log("[worker] loading model from:", modelUrl);
   try {
-    console.log("loading onnx model...");
-    
-    //get model url from extension
-    const modelUrl = chrome.runtime.getURL("models/esrgan_anime_model.onnx");
-    console.log("model url:", modelUrl);
-    
-    // Test if model file is accessible
-    try {
-      const testResponse = await fetch(modelUrl);
-      if (!testResponse.ok) {
-        throw new Error(`Model fetch returned status ${testResponse.status}`);
-      }
-      console.log("model file is accessible");
-    } catch (fetchError) {
-      console.error("model file not accessible:", fetchError);
-      throw new Error(`Cannot access model file at ${modelUrl}: ${fetchError.message}`);
-    }
-    
-    //create inference session
-    console.log("creating inference session with wasm provider...");
     session = await ort.InferenceSession.create(modelUrl, {
       executionProviders: ["wasm"],
-      graphOptimizationLevel: "all"
-});
-    
-    console.log("model loaded successfully");
-    console.log("input names:", session.inputNames);
-    console.log("output names:", session.outputNames);
-    
-    modelReady = true;
-    
-    //notify content script that worker is ready
-    self.postMessage({ status: "ready" });
-  } catch (error) {
-    console.error("failed to load model:", error);
-    self.postMessage({ status: "error", error: error.message });
+    });
+    console.log("[worker] model loaded");
+    console.log("[worker] inputs:", session.inputNames);
+    console.log("[worker] outputs:", session.outputNames);
+    return true;
+  } catch (err) {
+    console.error("[worker] FAILED to load model:", err);
+    return false;
   }
 }
 
-//run inference on image data
-async function runInference(imageData, mode = "speed") {
-  if (!modelReady) {
-    throw new Error("model not ready");
+function pixelsToTensor(imgData) {
+  const { width, height, data } = imgData;
+  const n = height * width;
+  const f = new Float32Array(3 * n);
+  for (let i = 0; i < n; i++) {
+    f[i]         = data[i * 4]     / 255; // R
+    f[n + i]     = data[i * 4 + 1] / 255; // G
+    f[2 * n + i] = data[i * 4 + 2] / 255; // B
   }
-  
-  try {
-    console.log("running inference...");
-    console.log("input shape:", imageData.width, "x", imageData.height);
-    console.log("mode:", mode);
-    
-    //convert imagedata to tensor
-const inputTensor = imageDataToTensor(imageData);
-console.log("input tensor shape:", inputTensor.dims);
-
-if (inputTensor.dims[2] === 0 || inputTensor.dims[3] === 0) {
-  throw new Error("invalid tensor dimensions");
+  return new ort.Tensor("float32", f, [1, 3, height, width]);
 }
-    
-    //configure inference options based on mode
-    const runOptions = {};
-    if (mode === "speed") {
-      // Speed mode: prioritize faster execution
-      runOptions.logSeverityLevel = 3; // Less logging
-      runOptions.logVerbosityLevel = 0;
-    } else if (mode === "quality") {
-      // Quality mode: prioritize better results
-      runOptions.logSeverityLevel = 2; // More logging for debugging
-      runOptions.logVerbosityLevel = 1;
+
+function tensorToPixels(tensor) {
+  const [, , h, w] = tensor.dims;
+  const d = tensor.data;
+  const n = h * w;
+  const out = new Uint8ClampedArray(4 * n);
+  for (let i = 0; i < n; i++) {
+    out[i * 4]     = Math.min(255, Math.max(0, d[i] * 255));
+    out[i * 4 + 1] = Math.min(255, Math.max(0, d[n + i] * 255));
+    out[i * 4 + 2] = Math.min(255, Math.max(0, d[2 * n + i] * 255));
+    out[i * 4 + 3] = 255;
+  }
+  return { width: w, height: h, data: Array.from(out) };
+}
+
+async function runInference(imgData) {
+  if (!session) throw new Error("model not loaded yet");
+  console.log("[worker] inference on", imgData.width, "x", imgData.height);
+  const input = pixelsToTensor(imgData);
+  const feeds = {};
+  feeds[session.inputNames[0]] = input;
+  const t0 = performance.now();
+  const results = await session.run(feeds);
+  console.log("[worker] inference took", ((performance.now() - t0) / 1000).toFixed(1), "s");
+  const output = results[session.outputNames[0]];
+  console.log("[worker] output shape:", output.dims);
+  return tensorToPixels(output);
+}
+
+// Only two messages: LOAD_MODEL and RUN
+self.onmessage = async (e) => {
+  const { action } = e.data;
+  console.log("[worker] got:", action);
+
+  if (action === "LOAD_MODEL") {
+    const ok = await loadModel(e.data.modelUrl);
+    self.postMessage({ action: "MODEL_STATUS", ready: ok });
+  }
+
+  if (action === "RUN") {
+    try {
+      const result = await runInference(e.data.imageData);
+      self.postMessage({ action: "RESULT", imageData: result });
+    } catch (err) {
+      console.error("[worker] error:", err);
+      self.postMessage({ action: "ERROR", error: err.message });
     }
-    
-    //run inference
-    const feeds = {};
-    feeds[session.inputNames[0]] = inputTensor;
-    
-    const results = await session.run(feeds, runOptions);
-    const outputTensor = results[session.outputNames[0]];
-    
-    console.log("inference complete");
-    console.log("output tensor shape:", outputTensor.dims);
-    
-    //convert tensor back to image data
-    const outputImageData = tensorToImageData(outputTensor);
-    
-    return outputImageData;
-  } catch (error) {
-    console.error("inference failed:", error);
-    throw error;
-  }
-}
-
-//convert imagedata to tensor (nchw format, normalized to [0,1])
-function imageDataToTensor(imageData) {
-  const { width, height, data } = imageData;
-  
-  //output tensor shape: [1, 3, height, width]
-  const tensorData = new Float32Array(1 * 3 * height * width);
-  
-  //convert rgba to rgb and normalize to [0, 1]
-  for (let h = 0; h < height; h++) {
-    for (let w = 0; w < width; w++) {
-      const pixelIndex = (h * width + w) * 4;
-      const tensorIndex = h * width + w;
-      
-      //red channel
-      tensorData[tensorIndex] = data[pixelIndex] / 255.0;
-      
-      //green channel
-      tensorData[height * width + tensorIndex] = data[pixelIndex + 1] / 255.0;
-      
-      //blue channel
-      tensorData[2 * height * width + tensorIndex] = data[pixelIndex + 2] / 255.0;
-    }
-  }
-  
-  return new ort.Tensor("float32", tensorData, [1, 3, height, width]);
-}
-
-//convert tensor back to imagedata
-function tensorToImageData(tensor) {
-  const [batch, channels, height, width] = tensor.dims;
-  const data = tensor.data;
-  
-  //create imagedata
-  const imageData = new ImageData(width, height);
-  
-  //convert from nchw to rgba
-  for (let h = 0; h < height; h++) {
-    for (let w = 0; w < width; w++) {
-      const tensorIndex = h * width + w;
-      const pixelIndex = (h * width + w) * 4;
-      
-      //denormalize from [0, 1] to [0, 255] and clamp
-      const r = Math.max(0, Math.min(255, data[tensorIndex] * 255));
-      const g = Math.max(0, Math.min(255, data[height * width + tensorIndex] * 255));
-      const b = Math.max(0, Math.min(255, data[2 * height * width + tensorIndex] * 255));
-      
-      imageData.data[pixelIndex] = r;
-      imageData.data[pixelIndex + 1] = g;
-      imageData.data[pixelIndex + 2] = b;
-      imageData.data[pixelIndex + 3] = 255; //alpha
-    }
-  }
-  
-  return imageData;
-}
-
-//listen for messages from content script
-self.onmessage = async (event) => {
-  console.log("worker received message:", event.data);
-  
-  const { action, imageData, messageId, mode } = event.data;
-  
-  switch (action) {
-    case "INFERENCE_REQUEST":
-      try {
-        const result = await runInference(imageData, mode || "speed");
-        self.postMessage({
-          status: "complete",
-          messageId: messageId,
-          imageData: result
-        });
-      } catch (error) {
-        self.postMessage({
-          status: "error",
-          messageId: messageId,
-          error: error.message
-        });
-      }
-      break;
-      
-    default:
-      console.warn("unknown action:", action);
   }
 };
-
-//start loading model
-console.log("starting model initialization...");
-initializeModel();
 

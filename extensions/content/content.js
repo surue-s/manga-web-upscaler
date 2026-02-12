@@ -1,242 +1,148 @@
-//content script: runs on webpages to detect and upscale images
-console.log("content script loaded on:", location.href);
+// content.js — runs on every page
+// Job: find images, extract pixels, talk to worker, replace image with upscaled version.
 
-//store detected images
+console.log("[content] loaded on", location.href);
+
+let worker = null;
+let modelReady = false;
 let detectedImages = [];
-let inferenceWorker = null;
-let workerReady = false;
-let messageQueue = [];
 
-//initialize web worker for inference
-function initializeWorker() {
-  if (inferenceWorker) {
-    console.log("worker already initialized");
-    return;
-  }
-  
-  try {
-    console.log("attempting to create worker...");
-    
-    //create worker using extension URL
-    const workerUrl = chrome.runtime.getURL("worker/inference-worker.js");
-    console.log("worker url:", workerUrl);
-    
-    inferenceWorker = new Worker(workerUrl);
-    console.log("worker created, waiting for ready message...");
-    
-      //listen for messages from worker
-    inferenceWorker.onmessage = (event) => {
-      console.log("worker message:", event.data);
-      
-      if (event.data.status === "ready") {
-        console.log("worker is ready");
-        workerReady = true;
-        
-        //process queued messages
-        if (messageQueue.length > 0) {
-          console.log(`processing ${messageQueue.length} queued messages`);
-          messageQueue.forEach(msg => inferenceWorker.postMessage(msg));
-          messageQueue = [];
-        }
-        
-        chrome.runtime.sendMessage({ action: "MODEL_LOADED" }).catch(err => {
-          console.log("no listener for MODEL_LOADED - extension may not be active");
-        });
-      }
-    };
-    
-    inferenceWorker.onerror = (error) => {
-      console.error("worker error:", error.message, error.filename, error.lineno);
-      workerReady = false;
-      inferenceWorker = null;
-    };
-    
-    console.log("worker initialized successfully");
-  } catch (error) {
-    console.error("failed to initialize worker:", error.message);
-  }
+// --- Worker setup ---
+function createWorker() {
+  if (worker) return;
+
+  const url = chrome.runtime.getURL("worker/inference-worker.js");
+  console.log("[content] creating worker from", url);
+
+  worker = new Worker(url);
+  worker.onmessage = (e) => {
+    console.log("[content] worker says:", e.data.action);
+
+    if (e.data.action === "MODEL_STATUS") {
+      modelReady = e.data.ready;
+      console.log("[content] model ready:", modelReady);
+      // Tell service-worker so popup can query it
+      chrome.runtime.sendMessage({ type: "MODEL_READY", ready: modelReady });
+    }
+
+    // RESULT and ERROR are handled per-request via the promise pattern below
+  };
+  worker.onerror = (err) => {
+    console.error("[content] worker error:", err.message);
+  };
+
+  // Tell worker to load the model (we resolve the URL here because worker can't use chrome.runtime)
+  const modelUrl = chrome.runtime.getURL("models/esrgan_anime_model.onnx");
+  console.log("[content] telling worker to load model:", modelUrl);
+  worker.postMessage({ action: "LOAD_MODEL", modelUrl });
 }
-//detect images on the page
-function detectImages() {
-  console.log("detecting images on page...");
+
+// --- Image detection ---
+function scanImages() {
   detectedImages = [];
-  
-  //find all img elements
-const allImages = document.querySelectorAll("img");
-console.log(`found ${allImages.length} total img elements on page`);
-  
-  //filter images (must be visible and reasonable size)
-  allImages.forEach((img) => {
-    //skip if too small
-    if (img.naturalWidth < 100 || img.naturalHeight < 100) {
-      return;
+  const imgs = document.querySelectorAll("img");
+  imgs.forEach((img) => {
+    if (img.naturalWidth >= 50 && img.naturalHeight >= 50) {
+      const rect = img.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        detectedImages.push(img);
+      }
     }
-    
-    //skip if not visible
-    const rect = img.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) {
-      return;
-    }
-    
-    //skip if display:none or visibility:hidden
-    const style = window.getComputedStyle(img);
-    if (style.display === "none" || style.visibility === "hidden") {
-      return;
-    }
-    
-    //add to detected images
-    detectedImages.push(img);
   });
-  
-  console.log(`detected ${detectedImages.length} valid images`);
+  console.log("[content] found", detectedImages.length, "images");
   return detectedImages.length;
 }
 
-//upscale a single image
-async function upscaleSingleImage(mode = "speed") {
-  if (detectedImages.length === 0) {
-    throw new Error("no images detected");
-  }
-  
-  if (!inferenceWorker) {
-    initializeWorker();
-  }
-  
-  // Wait for worker to be ready with timeout
-  let waitCount = 0;
-  while (!workerReady && waitCount < 120) { // 120 * 500ms = 60 seconds
-    await new Promise(resolve => setTimeout(resolve, 500));
-    waitCount++;
-  }
-  
-  if (!workerReady) {
-    throw new Error("worker initialization timeout - model took too long to load");
-  }
-  
-  const img = detectedImages[0];
-  console.log("upscaling image:", img.src, "mode:", mode);
-  
-  try {
-    //extract image data
-    const imageData = await extractImageData(img);
-    console.log("extracted image data:", imageData.width, "x", imageData.height);
-    
-    //send to worker for upscaling with mode parameter
-    const messageId = Date.now();
-    
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error("worker timeout"));
-      }, 60000);
-      
-      const handler = (event) => {
-        if (event.data.messageId === messageId) {
-          clearTimeout(timeout);
-          inferenceWorker.removeEventListener("message", handler);
-          
-          if (event.data.status === "complete") {
-            resolve({ success: true, imageData: event.data.imageData });
-          } else {
-            reject(new Error(event.data.error || "inference failed"));
-          }
-        }
-      };
-      
-      inferenceWorker.addEventListener("message", handler);
-      inferenceWorker.postMessage({
-        action: "INFERENCE_REQUEST",
-        imageData: imageData,
-        messageId: messageId,
-        mode: mode
-      });
-    });
-  } catch (error) {
-    console.error("upscale failed:", error);
-    throw error;
-  }
+// --- Extract pixel data from an <img> ---
+function getPixels(img) {
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const ctx = c.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+  const id = ctx.getImageData(0, 0, c.width, c.height);
+  // Return plain object (ImageData can't be cloned to worker in all browsers)
+  return { width: id.width, height: id.height, data: Array.from(id.data) };
 }
 
-//extract image data from img element
-async function extractImageData(img) {
-    if (!img.complete || img.naturalWidth === 0) {
-    throw new Error("image not loaded or invalid");
-  }
+// --- Replace image on page with upscaled pixels ---
+function replaceImage(img, pixels) {
+  const c = document.createElement("canvas");
+  c.width = pixels.width;
+  c.height = pixels.height;
+  const ctx = c.getContext("2d");
+  const id = ctx.createImageData(pixels.width, pixels.height);
+  for (let i = 0; i < pixels.data.length; i++) id.data[i] = pixels.data[i];
+  ctx.putImageData(id, 0, 0);
+  img.src = c.toDataURL("image/png");
+  img.style.width = pixels.width + "px";
+  img.style.height = pixels.height + "px";
+  console.log("[content] image replaced:", pixels.width, "x", pixels.height);
+}
+
+// --- Send image to worker and wait for result ---
+function upscaleViaWorker(imageData) {
   return new Promise((resolve, reject) => {
-    try {
-//create canvas
-const canvas = document.createElement("canvas");
-const ctx = canvas.getContext("2d");
-
-if (!ctx) {
-  reject(new Error("failed to get 2d context"));
-  return;
-}
-      //set canvas size to image size
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      
-      //draw image to canvas
-      ctx.drawImage(img, 0, 0);
-      
-      //get image data
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      resolve(imageData);
-    } catch (error) {
-      reject(error);
-    }
+    const handler = (e) => {
+      if (e.data.action === "RESULT") {
+        worker.removeEventListener("message", handler);
+        resolve(e.data.imageData);
+      }
+      if (e.data.action === "ERROR") {
+        worker.removeEventListener("message", handler);
+        reject(new Error(e.data.error));
+      }
+    };
+    worker.addEventListener("message", handler);
+    worker.postMessage({ action: "RUN", imageData });
   });
 }
 
-//listen for messages from service worker
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log("content script received:", request);
-  
-    try {
+// --- Main upscale flow ---
+async function upscaleFirstImage() {
+  if (detectedImages.length === 0) {
+    return { error: "no images found — click Scan first" };
+  }
+  if (!modelReady) {
+    return { error: "model still loading — wait a moment" };
+  }
 
-  switch (request.action) {
-    case "DETECT_IMAGES":
-      handleDetectImages(request, sender, sendResponse);
-      return false; //synchronous response
-      
-    case "UPSCALE_SINGLE_IMAGE":
-      handleUpscaleSingleImage(request, sender, sendResponse);
-      return true; //async response
-      
-    default:
-      console.warn("unknown action:", request.action);
-      sendResponse({ error: "unknown action" });
-      return false;
-    }
-  } catch (error) {
-    console.error("message handler error:", error);
-    sendResponse({ error: error.message });
+  const img = detectedImages[0];
+  console.log("[content] upscaling:", img.src.slice(0, 80));
+
+  try {
+    const pixels = getPixels(img);
+    console.log("[content] extracted", pixels.width, "x", pixels.height);
+    const result = await upscaleViaWorker(pixels);
+    replaceImage(img, result);
+    return { success: true, width: result.width, height: result.height };
+  } catch (err) {
+    console.error("[content] upscale failed:", err);
+    return { error: err.message };
+  }
+}
+
+// --- Listen for messages from popup (via service-worker) ---
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  console.log("[content] got message:", msg.type);
+
+  if (msg.type === "SCAN") {
+    const count = scanImages();
+    sendResponse({ count });
+    return false;
+  }
+
+  if (msg.type === "UPSCALE") {
+    // async — must return true to keep channel open
+    upscaleFirstImage().then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === "STATUS") {
+    sendResponse({ modelReady, imageCount: detectedImages.length });
     return false;
   }
 });
 
-//handler: detect images
-function handleDetectImages(request, sender, sendResponse) {
-  try {
-    const count = detectImages();
-    sendResponse({ count: count });
-  } catch (error) {
-    console.error("detect images error:", error);
-    sendResponse({ error: error.message });
-  }
-}
-
-//handler: upscale single image
-async function handleUpscaleSingleImage(request, sender, sendResponse) {
-  try {
-    const mode = request.mode || "speed";
-    const result = await upscaleSingleImage(mode);
-    sendResponse(result);
-  } catch (error) {
-    console.error("upscale error:", error);
-    sendResponse({ error: error.message });
-  }
-}
-
-//initialize worker when content script loads
-console.log("initializing worker...");
-initializeWorker();
+// --- Auto-init worker on load ---
+createWorker();

@@ -1,201 +1,82 @@
-console.log("popup script loaded");
-
-//dom elements
-const modelStatusEl = document.getElementById("modelStatus");
-const imageCountEl = document.getElementById("imageCount");
-const detectBtn = document.getElementById("detectBtn");
+// popup.js — simple UI to scan + upscale
+const modelEl   = document.getElementById("modelStatus");
+const countEl   = document.getElementById("imageCount");
+const scanBtn   = document.getElementById("scanBtn");
 const upscaleBtn = document.getElementById("upscaleBtn");
-const progressContainer = document.getElementById("progressContainer");
-const progressFill = document.getElementById("progressFill");
-const progressText = document.getElementById("progressText");
-const messageBox = document.getElementById("messageBox");
-const speedModeBtn = document.getElementById("speedModeBtn");
-const qualityModeBtn = document.getElementById("qualityModeBtn");
-const statusMessage = document.getElementById("statusMessage");
-const statusText = document.getElementById("statusText");
+const logEl     = document.getElementById("log");
 
-let detectedImagesCount = 0;
-let currentMode = "speed"; // default mode
+function log(msg) {
+  console.log("[popup]", msg);
+  logEl.textContent += msg + "\n";
+  logEl.scrollTop = logEl.scrollHeight;
+}
 
-//add fallback title attribute for accessibility
-function setupTooltips() {
-  document.querySelectorAll('[data-tooltip]').forEach(el => {
-    if (!el.title) {
-      el.title = el.getAttribute('data-tooltip');
+// Check status on open
+function checkStatus() {
+  chrome.runtime.sendMessage({ type: "GET_STATUS" }, (resp) => {
+    if (chrome.runtime.lastError) {
+      modelEl.textContent = "No tab";
+      modelEl.className = "value error";
+      log("error: " + chrome.runtime.lastError.message);
+      return;
+    }
+    if (resp && resp.modelReady) {
+      modelEl.textContent = "Ready";
+      modelEl.className = "value ready";
+    } else {
+      modelEl.textContent = "Loading...";
+      modelEl.className = "value loading";
+      setTimeout(checkStatus, 2000);
+    }
+    if (resp && resp.imageCount !== undefined) {
+      countEl.textContent = resp.imageCount;
+      upscaleBtn.disabled = resp.imageCount === 0 || !resp.modelReady;
     }
   });
 }
 
-//wait for dom to load
-document.addEventListener("DOMContentLoaded", () => {
-  console.log("Popup initialized");
-  
-  //setup tooltips for accessibility
-  setupTooltips();
-  
-  //load saved mode preference
-  chrome.storage.local.get(["upscaleMode"], (result) => {
-    if (result.upscaleMode) {
-      currentMode = result.upscaleMode;
-      updateModeUI();
+// Scan
+scanBtn.addEventListener("click", () => {
+  scanBtn.disabled = true;
+  log("scanning...");
+  chrome.runtime.sendMessage({ type: "SCAN" }, (resp) => {
+    scanBtn.disabled = false;
+    if (chrome.runtime.lastError) {
+      log("scan error: " + chrome.runtime.lastError.message);
+      return;
     }
+    if (resp && resp.error) {
+      log("scan error: " + resp.error);
+      return;
+    }
+    const n = resp ? resp.count : 0;
+    countEl.textContent = n;
+    log("found " + n + " images");
+    // Re-check status to update upscale button
+    checkStatus();
   });
-  
-  //check model status
-  checkModelStatus();
-  
-  //button click handlers
-  detectBtn.addEventListener("click", detectImages);
-  upscaleBtn.addEventListener("click", upscaleSingleImage);
-  speedModeBtn.addEventListener("click", () => setMode("speed"));
-  qualityModeBtn.addEventListener("click", () => setMode("quality"));
 });
 
-//check if model is loaded in the service worker
-function checkModelStatus() {
-  modelStatusEl.textContent = "Checking...";
-  
-  chrome.runtime.sendMessage(
-    { action: "CHECK_MODEL_STATUS" },
-    (response) => {
-      if (chrome.runtime.lastError) {
-        modelStatusEl.textContent = "Error - " + chrome.runtime.lastError.message;
-        console.error("Model status check error:", chrome.runtime.lastError);
-        return;
-      }
-      
-      if (response && response.modelReady) {
-        modelStatusEl.textContent = "Ready ✓";
-        modelStatusEl.style.color = "#4caf50";
-      } else {
-        modelStatusEl.textContent = "Loading... (60s first-time)";
-        modelStatusEl.style.color = "#ff9800";
-        // Recheck after 3 seconds
-        setTimeout(checkModelStatus, 3000);
-      }
-    }
-  );
-}
-
-//detect images on the current page
-function detectImages() {
-  console.log("detect images clicked");
-  detectBtn.disabled = true;
-  showStatus("Scanning page for images...");
-  
-  //send message to service worker
-  chrome.runtime.sendMessage(
-    { action: "DETECT_IMAGES" },
-    (response) => {
-      if (chrome.runtime.lastError) {
-        showError("failed to detect images: " + chrome.runtime.lastError.message);
-        hideStatus();
-        detectBtn.disabled = false;
-        return;
-      }
-      
-      if (response && response.count !== undefined) {
-        detectedImagesCount = response.count;
-        imageCountEl.textContent = detectedImagesCount;
-        upscaleBtn.disabled = detectedImagesCount === 0;
-        const plural = detectedImagesCount === 1 ? "image" : "images";
-        hideStatus();
-        showSuccess(`✓ Found ${detectedImagesCount} ${plural}`);
-      }
-      
-      detectBtn.disabled = false;
-    }
-  );
-}
-
-//upscale the first detected image
-function upscaleSingleImage() {
-  console.log("upscale single image clicked");
+// Upscale
+upscaleBtn.addEventListener("click", () => {
   upscaleBtn.disabled = true;
-  detectBtn.disabled = true;
-  progressContainer.style.display = "block";
-  updateProgress(0);
-  showStatus(`Upscaling image (${currentMode} mode)...`);
-  
-  //send message to service worker with mode preference
-  chrome.runtime.sendMessage(
-    { action: "UPSCALE_SINGLE_IMAGE", mode: currentMode },
-    (response) => {
-      if (chrome.runtime.lastError) {
-        showError("upscale failed: " + chrome.runtime.lastError.message);
-        progressContainer.style.display = "none";
-        hideStatus();
-        upscaleBtn.disabled = false;
-        detectBtn.disabled = false;
-        return;
-      }
-      
-      if (response && response.success) {
-        updateProgress(100);
-        hideStatus();
-        showSuccess("✓ Image upscaled successfully (4x)");
-      } else {
-        hideStatus();
-        showError(response?.error || "Upscaling failed");
-      }
-      
-      setTimeout(() => {
-        progressContainer.style.display = "none";
-        upscaleBtn.disabled = false;
-        detectBtn.disabled = false;
-      }, 2000);
+  scanBtn.disabled = true;
+  log("upscaling... (this may take 10-60s)");
+  chrome.runtime.sendMessage({ type: "UPSCALE" }, (resp) => {
+    upscaleBtn.disabled = false;
+    scanBtn.disabled = false;
+    if (chrome.runtime.lastError) {
+      log("error: " + chrome.runtime.lastError.message);
+      return;
     }
-  );
-}
+    if (resp && resp.success) {
+      log("done! output: " + resp.width + "x" + resp.height);
+    } else {
+      log("failed: " + (resp ? resp.error : "unknown"));
+    }
+  });
+});
 
-//set upscale mode
-function setMode(mode) {
-  currentMode = mode;
-  chrome.storage.local.set({ upscaleMode: mode });
-  updateModeUI();
-  showSuccess(`Mode: ${mode === "speed" ? "Speed" : "Quality"}`);
-}
-
-//update mode button UI
-function updateModeUI() {
-  if (currentMode === "speed") {
-    speedModeBtn.classList.add("active");
-    qualityModeBtn.classList.remove("active");
-  } else {
-    speedModeBtn.classList.remove("active");
-    qualityModeBtn.classList.add("active");
-  }
-}
-
-//helper: update progress bar
-function updateProgress(percent) {
-  progressFill.style.width = percent + "%";
-  progressText.textContent = percent + "%";
-}
-
-//helper: show error message
-function showError(message) {
-  messageBox.innerHTML = `<div class="error">${message}</div>`;
-  setTimeout(() => {
-    messageBox.innerHTML = "";
-  }, 5000);
-}
-
-//helper: show success message
-function showSuccess(message) {
-  messageBox.innerHTML = `<div class="success">${message}</div>`;
-  setTimeout(() => {
-    messageBox.innerHTML = "";
-  }, 5000);
-}
-
-//helper: show live status with spinner
-function showStatus(message) {
-  statusText.textContent = message;
-  statusMessage.classList.add("active");
-}
-
-//helper: hide live status
-function hideStatus() {
-  statusMessage.classList.remove("active");
-}
+// Init
+checkStatus();
+log("popup ready");
